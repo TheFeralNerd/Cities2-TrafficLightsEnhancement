@@ -10,17 +10,22 @@
 
         <!--The file where mod information which is required for publishing mod on PDX mods are stored-->
         <PublishConfigurationPath>Properties\PublishConfiguration.xml</PublishConfigurationPath>
+        
+        <!--Define whether modding environment is available-->
+        <CSIIToolPath>$([System.Environment]::GetEnvironmentVariable('CSII_TOOLPATH', 'EnvironmentVariableTarget.User'))</CSIIToolPath>
+        <HasModdingEnvironment Condition="'$(CSIIToolPath)' != ''">true</HasModdingEnvironment>
+        <HasModdingEnvironment Condition="'$(CSIIToolPath)' == ''">false</HasModdingEnvironment>
     </PropertyGroup>
 
     <!--Imports must be after PropertyGroup block-->
-    <Import Project="$([System.Environment]::GetEnvironmentVariable('CSII_TOOLPATH', 'EnvironmentVariableTarget.User'))\Mod.props" />
-    <Import Project="$([System.Environment]::GetEnvironmentVariable('CSII_TOOLPATH', 'EnvironmentVariableTarget.User'))\Mod.targets" Condition="'$(DisablePostProcessors)' != 'true'" />
+    <Import Project="$(CSIIToolPath)\Mod.props" Condition="'$(HasModdingEnvironment)' == 'true'" />
+    <Import Project="$(CSIIToolPath)\Mod.targets" Condition="'$(DisablePostProcessors)' != 'true' AND '$(HasModdingEnvironment)' == 'true'" />
 
     <PropertyGroup>
         <LangVersion>12.0</LangVersion>
     </PropertyGroup>
 
-    <ItemGroup>
+    <ItemGroup Condition="'$(HasModdingEnvironment)' == 'true'">
         <Reference Include="Game">
             <Private>false</Private>
         </Reference>
@@ -92,7 +97,7 @@
         </Reference>
     </ItemGroup>
 
-    <ItemGroup>
+    <ItemGroup Condition="'$(HasModdingEnvironment)' == 'true'">
         <None Include="$(ModPropsFile)" Link="Properties\Mod.props" />
         <None Include="$(ModTargetsFile)" Link="Properties\Mod.targets" />
     </ItemGroup>
@@ -101,17 +106,17 @@
         <EmbeddedResource Include="Resources\**\*" />
     </ItemGroup>
 
-    <ItemGroup>
+    <ItemGroup Condition="Exists('..\CommonLibraries\LaneSystem\LaneSystem.csproj')">
         <ProjectReference Include="..\CommonLibraries\LaneSystem\LaneSystem.csproj" />
     </ItemGroup>
 
-    <Target Name="BuildFrontend" BeforeTargets="CoreCompile" Condition="'$(DisableBuildFrontend)' != 'true'">
+    <Target Name="BuildFrontend" BeforeTargets="CoreCompile" Condition="'$(DisableBuildFrontend)' != 'true' AND Exists('..\TLEFrontend\package.json')">
         <Exec Command="npm install --prefer-offline --no-audit" WorkingDirectory="..\TLEFrontend\" />
         <Exec Command="npm run build" WorkingDirectory="..\TLEFrontend\" />
         <Copy SourceFiles="..\TLEFrontend\dist\C2VM.TLEFrontend.mjs" DestinationFolder="$(OutDir)\" />
     </Target>
 
-    <Target Name="CopyLaneSystem" BeforeTargets="CoreCompile">
+    <Target Name="CopyLaneSystem" BeforeTargets="CoreCompile" Condition="Exists('..\CommonLibraries\LaneSystem\bin\$(Configuration)\$(TargetFramework)\')">
         <ItemGroup>
             <LaneSystemFiles Include="..\CommonLibraries\LaneSystem\bin\$(Configuration)\$(TargetFramework)\*.*" />
         </ItemGroup>
