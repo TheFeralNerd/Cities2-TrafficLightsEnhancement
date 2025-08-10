@@ -54,6 +54,13 @@ public class PredefinedPatternsProcessor
                 return false;
             }
 
+            case (uint)CustomTrafficLights.Patterns.RingBarrier:
+            {
+                // Ring & barrier pattern supports any intersection configuration
+                // But performs best on 4-way intersections
+                return true;
+            }
+
             default:
             {
                 return true;
@@ -719,5 +726,141 @@ public class PredefinedPatternsProcessor
             job.m_LaneSignalData[subLane] = laneSignal;
             job.m_ExtraTypeHandle.m_ExtraLaneSignal[subLane] = extraLaneSignal;
         }
+    }
+
+    public static void SetupRingBarrier(ref InitializeTrafficLightsJob job, DynamicBuffer<ConnectedEdge> connectedEdges, DynamicBuffer<SubLane> subLanes, out int groupCount, ref TrafficLights trafficLights)
+    {
+        NativeHashMap<Entity, NodeUtils.LaneConnection> laneConnectionMap = NodeUtils.GetLaneConnectionMap(Allocator.Temp, subLanes, connectedEdges, job.m_ExtraTypeHandle.m_SubLane, job.m_ExtraTypeHandle.m_Lane);
+        groupCount = 0;
+
+        // Reset all lane signals
+        for (int i = 0; i < subLanes.Length; i++)
+        {
+            Entity subLane = subLanes[i].m_SubLane;
+            if (!job.m_LaneSignalData.TryGetComponent(subLane, out var laneSignal))
+            {
+                continue;
+            }
+            laneSignal.m_GroupMask = 0;
+            job.m_LaneSignalData[subLane] = laneSignal;
+        }
+
+        // Set up ring & barrier lane grouping based on movement types
+        // Phase 1: Main road through movements (typically east-west)
+        SetupMovementGroup(ref job, subLanes, laneConnectionMap, connectedEdges, MovementType.MainThroughMovement, ref groupCount);
+        
+        // Phase 2: Main road left turns
+        SetupMovementGroup(ref job, subLanes, laneConnectionMap, connectedEdges, MovementType.MainLeftTurn, ref groupCount);
+        
+        // Phase 3: Cross road through movements (typically north-south)  
+        SetupMovementGroup(ref job, subLanes, laneConnectionMap, connectedEdges, MovementType.CrossThroughMovement, ref groupCount);
+        
+        // Phase 4: Cross road left turns
+        SetupMovementGroup(ref job, subLanes, laneConnectionMap, connectedEdges, MovementType.CrossLeftTurn, ref groupCount);
+
+        // Set up pedestrian phases (phases 5-8)
+        SetupPedestrianLanes(ref job, subLanes, groupCount, laneConnectionMap);
+        CheckPedestrianLanes(ref job, subLanes, ref groupCount);
+
+        UpdateLaneSignal(ref job, subLanes, ref trafficLights);
+        laneConnectionMap.Dispose();
+    }
+
+    private enum MovementType
+    {
+        MainThroughMovement,
+        MainLeftTurn,
+        CrossThroughMovement,
+        CrossLeftTurn
+    }
+
+    private static void SetupMovementGroup(ref InitializeTrafficLightsJob job, DynamicBuffer<SubLane> subLanes, 
+        NativeHashMap<Entity, NodeUtils.LaneConnection> laneConnectionMap, DynamicBuffer<ConnectedEdge> connectedEdges,
+        MovementType movementType, ref int groupCount)
+    {
+        bool hasLanes = false;
+
+        for (int i = 0; i < subLanes.Length; i++)
+        {
+            Entity subLane = subLanes[i].m_SubLane;
+            if (!job.m_LaneSignalData.TryGetComponent(subLane, out var laneSignal))
+                continue;
+
+            if (!job.m_CarLaneData.HasComponent(laneConnectionMap[subLane].m_SourceSubLane))
+                continue;
+
+            if (ShouldAssignToMovementGroup(laneConnectionMap[subLane], connectedEdges, movementType))
+            {
+                laneSignal.m_GroupMask |= (ushort)(1 << groupCount);
+                job.m_LaneSignalData[subLane] = laneSignal;
+                hasLanes = true;
+            }
+        }
+
+        if (hasLanes)
+        {
+            groupCount++;
+        }
+    }
+
+    private static bool ShouldAssignToMovementGroup(NodeUtils.LaneConnection connection, 
+        DynamicBuffer<ConnectedEdge> connectedEdges, MovementType movementType)
+    {
+        // Simplified assignment logic
+        // In a real implementation, this would analyze the intersection geometry
+        // and determine movement types based on lane connections and directions
+        
+        // For now, use a simple rotation-based assignment
+        int sourceIndex = GetEdgeIndex(connectedEdges, connection.m_SourceEdge);
+        int targetIndex = GetEdgeIndex(connectedEdges, connection.m_TargetEdge);
+        
+        if (sourceIndex == -1 || targetIndex == -1)
+            return false;
+
+        bool isLeftTurn = IsLeftTurn(sourceIndex, targetIndex, connectedEdges.Length);
+        bool isThroughMovement = IsThroughMovement(sourceIndex, targetIndex, connectedEdges.Length);
+        bool isMainRoad = IsMainRoad(sourceIndex, connectedEdges.Length);
+
+        switch (movementType)
+        {
+            case MovementType.MainThroughMovement:
+                return isMainRoad && isThroughMovement;
+            case MovementType.MainLeftTurn:
+                return isMainRoad && isLeftTurn;
+            case MovementType.CrossThroughMovement:
+                return !isMainRoad && isThroughMovement;
+            case MovementType.CrossLeftTurn:
+                return !isMainRoad && isLeftTurn;
+            default:
+                return false;
+        }
+    }
+
+    private static int GetEdgeIndex(DynamicBuffer<ConnectedEdge> connectedEdges, Entity edge)
+    {
+        for (int i = 0; i < connectedEdges.Length; i++)
+        {
+            if (connectedEdges[i].m_Edge.Equals(edge))
+                return i;
+        }
+        return -1;
+    }
+
+    private static bool IsLeftTurn(int sourceIndex, int targetIndex, int edgeCount)
+    {
+        // Left turn is typically (sourceIndex + 1) % edgeCount for counterclockwise
+        return targetIndex == (sourceIndex + 1) % edgeCount;
+    }
+
+    private static bool IsThroughMovement(int sourceIndex, int targetIndex, int edgeCount)
+    {
+        // Through movement is typically opposite edge
+        return targetIndex == (sourceIndex + edgeCount / 2) % edgeCount;
+    }
+
+    private static bool IsMainRoad(int edgeIndex, int edgeCount)
+    {
+        // Assume first two edges are main road (east-west)
+        return edgeIndex < 2;
     }
 }

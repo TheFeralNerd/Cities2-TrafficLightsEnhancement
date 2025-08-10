@@ -19,6 +19,8 @@ public struct CustomTrafficLights : IComponentData, IQueryTypeParameter, ISerial
 
         CustomPhase = 5,
 
+        RingBarrier = 6,
+
         ExclusivePedestrian = 1 << 16,
 
         AlwaysGreenKerbsideTurn = 1 << 17,

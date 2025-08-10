@@ -80,6 +80,11 @@ public class Mod : IMod
         updateSystem.UpdateAt<C2VM.TrafficLightsEnhancement.Systems.Update.ModificationUpdateSystem>(SystemUpdatePhase.ModificationEnd);
         updateSystem.UpdateAfter<C2VM.TrafficLightsEnhancement.Systems.Update.SimulationUpdateSystem>(SystemUpdatePhase.GameSimulation);
 
+        // Ring & Barrier Systems
+        updateSystem.UpdateAt<C2VM.TrafficLightsEnhancement.Systems.RingBarrier.RingBarrierInitializationSystem>(SystemUpdatePhase.Modification4B);
+        updateSystem.UpdateAt<C2VM.TrafficLightsEnhancement.Systems.RingBarrier.VehicleDetectionSystem>(SystemUpdatePhase.GameSimulation);
+        updateSystem.UpdateAfter<C2VM.TrafficLightsEnhancement.Systems.RingBarrier.RingBarrierControllerSystem, C2VM.TrafficLightsEnhancement.Systems.RingBarrier.VehicleDetectionSystem>(SystemUpdatePhase.GameSimulation);
+
         SetCompatibilityMode(m_Settings != null && m_Settings.m_CompatibilityMode);
     }
 

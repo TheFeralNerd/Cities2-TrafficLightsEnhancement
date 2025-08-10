@@ -98,6 +98,10 @@ public partial class UISystem : UISystemBase
                     menu.items.Add(UITypes.MainPanelItemPattern("ProtectedLeftTurns", (uint)CustomTrafficLights.Patterns.ProtectedCentreTurn, (uint)m_CustomTrafficLights.GetPattern()));
                 }
             }
+            if (PredefinedPatternsProcessor.IsValidPattern(m_EdgeInfoDictionary[m_SelectedEntity], CustomTrafficLights.Patterns.RingBarrier))
+            {
+                menu.items.Add(UITypes.MainPanelItemPattern("RingBarrier", (uint)CustomTrafficLights.Patterns.RingBarrier, (uint)m_CustomTrafficLights.GetPattern()));
+            }
             menu.items.Add(UITypes.MainPanelItemPattern("CustomPhase", (uint)CustomTrafficLights.Patterns.CustomPhase, (uint)m_CustomTrafficLights.GetPattern()));
             if (m_CustomTrafficLights.GetPatternOnly() == CustomTrafficLights.Patterns.CustomPhase)
             {
