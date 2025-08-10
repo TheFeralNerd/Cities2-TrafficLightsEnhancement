@@ -88,7 +88,7 @@ public partial struct RingBarrierInitializationSystem : ISystem
                 
                 // Add detector buffer
                 var detectorBuffer = CommandBuffer.AddBuffer<DetectorData>(chunkIndex, entity);
-                InitializeDetectors(ref detectorBuffer);
+                // Detector initialization will be handled by a separate system
                 
                 // Add call buffer
                 CommandBuffer.AddBuffer<CallData>(chunkIndex, entity);
@@ -185,28 +185,6 @@ public partial struct RingBarrierInitializationSystem : ISystem
             phases[3].SetConflict(5, true);
             phases[3].SetConflict(6, true);
             phases[3].SetConflict(8, true);
-        }
-
-        private void InitializeDetectors(ref DynamicBuffer<DetectorData> detectors)
-        {
-            // Create basic detectors for each phase
-            // In a real implementation, this would analyze the intersection geometry
-            
-            for (byte phase = 1; phase <= 8; phase++)
-            {
-                var detector = new DetectorData();
-                detector.m_DetectorId = phase; // Simple ID assignment
-                detector.m_AssignedPhase = phase;
-                detector.m_Type = DetectorData.DetectorType.Presence;
-                detector.m_Position = 0.9f; // Near stop line
-                detector.m_Length = 2.0f; // 2 meter detection zone
-                detector.m_Sensitivity = 0.8f;
-                detector.m_CanPlaceCalls = true;
-                detector.m_ProvidesExtension = true;
-                detector.m_Enabled = phase <= 4; // Enable only vehicular phases initially
-                
-                detectors.Add(detector);
-            }
         }
     }
 }

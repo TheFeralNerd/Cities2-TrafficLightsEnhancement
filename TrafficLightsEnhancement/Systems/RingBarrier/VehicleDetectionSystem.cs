@@ -6,6 +6,7 @@ using Unity.Mathematics;
 using Game.Net;
 using Game.Common;
 using Game.Vehicles;
+using Game.Objects;
 using C2VM.TrafficLightsEnhancement.Components;
 
 namespace C2VM.TrafficLightsEnhancement.Systems.RingBarrier;
@@ -19,6 +20,7 @@ public partial struct VehicleDetectionSystem : ISystem
     private EntityQuery m_DetectorQuery;
     private EntityQuery m_VehicleQuery;
     private EntityQuery m_ControllerQuery;
+    private EntityQuery m_LaneQuery;
 
     [BurstCompile]
     public void OnCreate(ref SystemState state)
@@ -28,13 +30,17 @@ public partial struct VehicleDetectionSystem : ISystem
             .Build();
 
         m_VehicleQuery = SystemAPI.QueryBuilder()
-            .WithAll<Vehicle, Game.Objects.Moving>()
-            .WithAll<Game.Common.Target>()
+            .WithAll<Vehicle, Moving>()
+            .WithAll<Target>()
             .Build();
 
         m_ControllerQuery = SystemAPI.QueryBuilder()
             .WithAll<RingBarrierController, CallData>()
             .WithAll<CustomTrafficLights>()
+            .Build();
+
+        m_LaneQuery = SystemAPI.QueryBuilder()
+            .WithAll<Lane, Curve>()
             .Build();
 
         state.RequireForUpdate(m_DetectorQuery);
@@ -49,8 +55,12 @@ public partial struct VehicleDetectionSystem : ISystem
         {
             CurrentTime = currentTime,
             VehicleLookup = SystemAPI.GetComponentLookup<Vehicle>(true),
-            TargetLookup = SystemAPI.GetComponentLookup<Game.Common.Target>(true),
-            MovingLookup = SystemAPI.GetComponentLookup<Game.Objects.Moving>(true)
+            TargetLookup = SystemAPI.GetComponentLookup<Target>(true),
+            MovingLookup = SystemAPI.GetComponentLookup<Moving>(true),
+            TransformLookup = SystemAPI.GetComponentLookup<Game.Objects.Transform>(true),
+            LaneLookup = SystemAPI.GetComponentLookup<Lane>(true),
+            CurveLookup = SystemAPI.GetComponentLookup<Curve>(true),
+            LaneObjectsLookup = SystemAPI.GetBufferLookup<LaneObject>(true)
         };
 
         var callPlacementJob = new CallPlacementJob
@@ -71,17 +81,29 @@ public partial struct VehicleDetectionSystem : ISystem
         public ComponentLookup<Vehicle> VehicleLookup;
         
         [ReadOnly]
-        public ComponentLookup<Game.Common.Target> TargetLookup;
+        public ComponentLookup<Target> TargetLookup;
         
         [ReadOnly]
-        public ComponentLookup<Game.Objects.Moving> MovingLookup;
+        public ComponentLookup<Moving> MovingLookup;
+        
+        [ReadOnly]
+        public ComponentLookup<Game.Objects.Transform> TransformLookup;
+        
+        [ReadOnly]
+        public ComponentLookup<Lane> LaneLookup;
+        
+        [ReadOnly]
+        public ComponentLookup<Curve> CurveLookup;
+        
+        [ReadOnly]
+        public BufferLookup<LaneObject> LaneObjectsLookup;
 
         public void Execute(ref DynamicBuffer<DetectorData> detectors)
         {
             for (int i = 0; i < detectors.Length; i++)
             {
                 var detector = detectors[i];
-                if (!detector.m_Enabled)
+                if (!detector.m_Enabled || detector.m_LaneEntity == Entity.Null)
                     continue;
 
                 // Check for vehicle presence in detection zone
@@ -96,15 +118,50 @@ public partial struct VehicleDetectionSystem : ISystem
 
         private bool CheckVehiclePresence(DetectorData detector)
         {
-            // Simplified detection logic
-            // In a real implementation, this would:
-            // 1. Get all vehicles on the detector's lane
-            // 2. Check if any vehicle is within the detection zone
-            // 3. Apply sensitivity and filtering
+            // Check if lane exists and has vehicles
+            if (!LaneObjectsLookup.HasBuffer(detector.m_LaneEntity))
+                return false;
+
+            var laneObjects = LaneObjectsLookup[detector.m_LaneEntity];
+            if (!CurveLookup.TryGetComponent(detector.m_LaneEntity, out var laneCurve))
+                return false;
+
+            var detectionZone = detector.GetDetectionZone();
             
-            // For now, return a simple simulation based on detector position
-            // This would be replaced with actual vehicle position checking
-            return UnityEngine.Random.Range(0f, 1f) < 0.1f; // 10% chance of detection per frame
+            // Check each vehicle on the lane
+            for (int i = 0; i < laneObjects.Length; i++)
+            {
+                var laneObject = laneObjects[i];
+                
+                // Only check vehicles
+                if (!VehicleLookup.HasComponent(laneObject.m_LaneObject))
+                    continue;
+
+                // Get vehicle position on lane (0.0 to 1.0)
+                float vehiclePosition = GetVehiclePositionOnLane(laneObject, laneCurve);
+                
+                // Check if vehicle is in detection zone
+                if (vehiclePosition >= detectionZone.x && vehiclePosition <= detectionZone.y)
+                {
+                    // Apply sensitivity check
+                    if (UnityEngine.Random.Range(0f, 1f) < detector.m_Sensitivity)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private float GetVehiclePositionOnLane(LaneObject laneObject, Curve laneCurve)
+        {
+            // Simplified position calculation
+            // In a real implementation, this would use the vehicle's transform
+            // and project it onto the lane curve to get the exact position
+            
+            // For now, use a approximation based on curve parameter
+            return math.clamp(laneObject.m_CurvePosition, 0f, 1f);
         }
     }
 
