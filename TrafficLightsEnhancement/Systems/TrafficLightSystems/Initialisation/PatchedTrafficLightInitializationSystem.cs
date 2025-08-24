@@ -252,6 +252,10 @@ public partial class PatchedTrafficLightInitializationSystem : Game.GameSystemBa
                     {
                         PredefinedPatternsProcessor.SetupProtectedCentreTurn(ref this, connectedEdgeAccessor[i], subLanes, out groupCount, ref trafficLights);
                     }
+                    else if (customTrafficLights.GetPatternOnly() == CustomTrafficLights.Patterns.RingBarrier)
+                    {
+                        PredefinedPatternsProcessor.SetupRingBarrier(ref this, connectedEdgeAccessor[i], subLanes, out groupCount, ref trafficLights);
+                    }
                     else
                     {
                         FillLaneBuffers(subLanes, vehicleLanes, pedestrianLanes);
